@@ -35,11 +35,13 @@ get stuck.
 
 ## Kernel versions tested with issue present
 
-* 5.15
-* 5.19
-* 6.2
-* 6.3
-* 6.4
+Distro used: Ubuntu 22.04
+
+* 5.15 (linux-image-5.15.0-76-generic-5.15.0-76.83 - default kernel)
+* 5.19 (linux-image-5.19.0-45-generic-5.19.0-45.46 - HWE 22.04 kernel)
+* 6.2  (linux-image-6.2.0-25-generic-6.2.0-25.25   - 23.04 kernel)
+* 6.3  (linux-image-6.3.0-7-generic-6.3.0-7.7      - 23.04 kernel)
+* 6.4  (linux-image-unsigned-6.4.0-060400-generic-6.4.0-060400.202306271339 - mainline kernel)
 
 ## Concept of this reproducer
 
