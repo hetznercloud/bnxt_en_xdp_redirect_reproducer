@@ -36,12 +36,14 @@ get stuck.
 ## Kernel versions tested with issue present
 
 Distro used: Ubuntu 22.04
+Kernel cmdline: BOOT_IMAGE=/vmlinuz-6.5.0-060500rc1-generic root=/dev/mapper/vg_storage-root ro net.ifnames=0 crashkernel=1G
 
-* 5.15 (linux-image-5.15.0-76-generic-5.15.0-76.83 - default kernel)
-* 5.19 (linux-image-5.19.0-45-generic-5.19.0-45.46 - HWE 22.04 kernel)
-* 6.2  (linux-image-6.2.0-25-generic-6.2.0-25.25   - 23.04 kernel)
-* 6.3  (linux-image-6.3.0-7-generic-6.3.0-7.7      - 23.04 kernel)
-* 6.4  (linux-image-unsigned-6.4.0-060400-generic-6.4.0-060400.202306271339 - mainline kernel)
+* 5.15    (default package   - linux-image-5.15.0-76-generic_5.15.0-76.83)
+* 5.19    (HWE 22.04 package - linux-image-5.19.0-45-generic_5.19.0-45.46)
+* 6.2     (23.04 sources     - linux-image-6.2.0-25-generic_6.2.0-25.25)
+* 6.3     (23.04 sources     - linux-image-6.3.0-7-generic_6.3.0-7.7)
+* 6.4     (mainline PPA      - linux-image-unsigned-6.4.0-060400-generic_6.4.0-060400.202306271339)
+* 6.5-rc1 (mainline PPA      - linux-image-unsigned-6.5.0-060500rc1-generic_6.5.0-060500rc1.202307092131)
 
 ## Concept of this reproducer
 
