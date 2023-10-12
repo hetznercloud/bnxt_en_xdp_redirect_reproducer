@@ -47,6 +47,7 @@ Kernel cmdline: BOOT_IMAGE=/vmlinuz-6.5.0-060500rc1-generic root=/dev/mapper/vg_
 * 6.4     (mainline PPA      - linux-image-unsigned-6.4.0-060400-generic_6.4.0-060400.202306271339)
 * 6.5-rc1 (mainline PPA      - linux-image-unsigned-6.5.0-060500rc1-generic_6.5.0-060500rc1.202307092131)
 * 6.6-rc3 (mainline PPA      - linux-image-unsigned-6.6.0-060600rc3-generic_6.6.0-060600rc3.202309242231)
+* 6.6-rc5 (mainline PPA      - linux-image-unsigned-6.6.0-060600rc5-generic_6.6.0-060600rc5.202310081731)
 
 ## Concept of this reproducer
 
