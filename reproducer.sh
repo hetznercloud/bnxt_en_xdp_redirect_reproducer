@@ -2,23 +2,23 @@
 
 set -eEuo pipefail
 
+# Override bpftool command, if it is not in $PATH.
 : ${BPFTOOL:=bpftool}
 
-: ${EXT_IF:=eth0}
+# The uplink interface. This is the bnxt_en interface.
+: ${UPLINK_IF:=eth0}
 
 # Host to fetch a http resource from. Must be an IPv4 address.
 : ${TEST_HOST:=185.12.64.3}
 # HTTP resource to fetch. Should not be smaller than 10MB.
-: ${TEST_RESOURCE:=ubuntu/packages/pool/main/l/linux-signed/linux-image-6.3.0-7-generic_6.3.0-7.7_arm64.deb}
-
-: ${BPF_INGRESS_PROG:=ingress_by_map}
-: ${BPF_EGRESS_PROG:=egress_by_map}
+: ${TEST_RESOURCE:=/ubuntu/packages/pool/main/l/linux-signed/kernel-signed-image-5.4.0-100-generic-di_5.4.0-100.113_amd64.udeb}
 
 : ${REDIR_IF:=in0}
 : ${CLONE_IF:=out0}
 : ${BPFFS_DIR:=/sys/fs/bpf/redirect}
 : ${BPF_REDIRECT_OBJ:=bpf/redirect.o}
-: ${BPF_PASS_OBJ:=bpf/pass.o}
+
+REDIRECT_TARGET_EGRESS=1
 
 __byte_fmt() {
 	local -i i="$1"
@@ -35,36 +35,21 @@ __set_redirect() {
 	$BPFTOOL map update name redirects key $key value $value
 }
 
-__setup_ingress_redirect() {
-	local idx=$(<"/sys/class/net/$REDIR_IF/ifindex")
-	__set_redirect 0 "$idx"
-}
-
-__setup_egress_redirect() {
-	local idx=$(<"/sys/class/net/$EXT_IF/ifindex")
-	__set_redirect 1 "$idx"
-}
-
-__unset_ingress_redirect() {
-	__set_redirect 0 0
-}
-
-__unset_egress_redirect() {
-	__set_redirect 1 0
-}
-
 cleanup() {
-	ip link set "$EXT_IF" xdp off
+	ip link set "$UPLINK_IF" xdp off
 	rm -rf "$BPFFS_DIR"
 	ip link del "$REDIR_IF" || true
 }
 
+# Parse forwarding information needed to send test traffic out on the clone
+# interface. We use the uplink interface's IPv4 and MAC address, so there's
+# no need to modify the packet in any way in eBPF.
 get_fib_info_to_target() {
-	local ext_if=$1
+	local UPLINK_IF=$1
 	local target=$2
 
-	# Parse route to the test host on the external interface.
-	local route_parts=($(ip route get "$target" dev "$ext_if"))
+	# Parse route to the test host on the uplink interface.
+	local route_parts=($(ip route get "$target" dev "$UPLINK_IF"))
 	if [[ ${route_parts[1]} != "via" ]]; then
 		echo "route not a nexthop route (missing via)? '${route_parts[@]}'" >&2
 		return 1
@@ -73,8 +58,9 @@ get_fib_info_to_target() {
 		return 1
 	fi
 
+	local uplink_idx=$(<"/sys/class/net/$UPLINK_IF/ifindex")
 	local local_addr=${route_parts[6]}
-	local local_mac=$(<"/sys/class/net/$ext_if/address")
+	local local_mac=$(<"/sys/class/net/$UPLINK_IF/address")
 	local gw_addr=${route_parts[2]}
 	local gw_mac=$(ip -br neigh show "$gw_addr" | awk 'NR==1 {print $3}')
 
@@ -83,62 +69,21 @@ get_fib_info_to_target() {
 		return 1
 	fi
 
-	echo "$local_addr" "$local_mac" "$gw_addr" "$gw_mac"
+	echo "$uplink_idx" "$local_addr" "$local_mac" "$gw_addr" "$gw_mac"
 }
 
-send_on_clone() {
-	__setup_egress_redirect
-	read local_addr local_mac gw_addr gw_mac < <(get_fib_info_to_target "$EXT_IF" "$TEST_HOST")
-	ip route replace "$TEST_HOST" via "$gw_addr" dev "$CLONE_IF" onlink
-}
-
-send_on_ext() {
-	__unset_egress_redirect
-	ip route flush dev "$CLONE_IF" >&/dev/null || true
-}
-
-receive_on_clone() {
-	__setup_ingress_redirect
-}
-
-receive_on_ext() {
-	__unset_ingress_redirect
-}
-
-set_mode() {
-	local mode=$1
-
-	case "$mode" in
-	redirect_none | n)
-		send_on_ext
-		receive_on_ext
-		;;
-	redirect_ingress | i)
-		send_on_ext
-		receive_on_clone
-		;;
-	redirect_egress | e)
-		send_on_clone
-		receive_on_ext
-		;;
-	redirect_both | b)
-		send_on_clone
-		receive_on_clone
-		;;
-	*)
-		echo "mode not supported: $mode (available: redirect_[none|ingress|egress|both] | [n|i|e|b]))" >&2
-		return 1
-		;;
-	esac
-}
-
+# Create a veth pair. Copy IP and MAC addresses from the uplink interface so
+# we can easily send on the veth interface and redirect from the peer to the
+# uplink interface. Replies will just be received on the uplink interface
+# itself.
 setup_ifaces() {
-	local local_addr="$1"
-	local local_mac="$2"
-	local gw_addr="$3"
-	local gw_mac="$4"
+	local uplink_idx local_addr local_mac gw_addr gw_mac
 
-	# The veth CLONE_IF is supposed to be a simple clone of the external interface addresses.
+	read uplink_idx local_addr local_mac gw_addr gw_mac \
+		< <(get_fib_info_to_target "$UPLINK_IF" "$TEST_HOST")
+
+	# The veth CLONE_IF is supposed to be a simple clone of the external interface
+	# addresses.
 	ip link add "$REDIR_IF" type veth peer "$CLONE_IF" addr "$local_mac"
 	ethtool -K "$CLONE_IF" rx off tx off >/dev/null
 
@@ -153,12 +98,24 @@ setup_ifaces() {
 
 	mkdir -p "$BPFFS_DIR"
 	$BPFTOOL prog loadall "$BPF_REDIRECT_OBJ" /sys/fs/bpf/redirect/ type xdp
-	ip link set "$EXT_IF" xdp pinned "$BPFFS_DIR/$BPF_INGRESS_PROG"
-	ip link set "$REDIR_IF" xdp pinned "$BPFFS_DIR/$BPF_EGRESS_PROG"
-	ip link set "$CLONE_IF" xdp obj "$BPF_PASS_OBJ"
+	# Load a program that call bpf_redirect but doesn't actually redirect. This
+	# is enough to trigger to issue.
+	ip link set "$UPLINK_IF" xdp pinned "$BPFFS_DIR/ingress"
+	# Load a program that actually redirects traffic to the bnxt_en interface.
+	ip link set "$REDIR_IF" xdp pinned "$BPFFS_DIR/egress"
+
+	# Provision the redirect map.
+	__set_redirect $REDIRECT_TARGET_EGRESS "$uplink_idx"
+
+	# Send traffic to the test host on the clone interface so the traffic is
+	# triggering some XDP_redirects to the bnxt_en interface.
+	ip route replace "$TEST_HOST" via "$gw_addr" dev "$CLONE_IF" onlink
 }
 
-run_test() {
+# If setup is done, this traffic will be sent out on the clone interface, so
+# doing XDP redirects, but the responses will be received on the uplink
+# interface directly.
+run_curl() {
 	for local_port in {32700..32767}; do
 		echo "Local Port $local_port:"
 		curl \
@@ -171,16 +128,9 @@ run_test() {
 	done
 }
 
-check_setup() {
-	if ! $BPFTOOL map show name redirects >&/dev/null; then
-		echo "missing redirects map. Did you run setup yet? Maybe try cleanup then setup." >&2
-		return 1
-	fi
-}
-
 build_bpf() (
 	pushd bpf
-	make
+	make --quiet
 )
 
 cmd="${1:-}"
@@ -190,26 +140,18 @@ case "$cmd" in
 cleanup)
 	cleanup
 	;;
-reset)
-	cleanup
-	;&
 setup)
 	build_bpf
 	trap cleanup ERR
-	setup_ifaces $(get_fib_info_to_target "$EXT_IF" "$TEST_HOST")
+	setup_ifaces
 	;;
-set_mode)
-	check_setup
-	set_mode $1
-	;;
-run)
-	check_setup
-	run_test
+run_curl)
+	run_curl
 	;;
 "")
-	echo "no command given. (available: cleanup, setup, set_mode <mode>, run, reset)"
+	echo "no command given. (available: cleanup, setup, run_curl)"
 	;;
 *)
-	echo "unknown command: $cmd (available: cleanup, setup, set_mode <mode>, run, reset)"
+	echo "unknown command: $cmd (available: cleanup, setup, run_curl)"
 	;;
 esac

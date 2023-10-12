@@ -44,6 +44,7 @@ Kernel cmdline: BOOT_IMAGE=/vmlinuz-6.5.0-060500rc1-generic root=/dev/mapper/vg_
 * 6.3     (23.04 sources     - linux-image-6.3.0-7-generic_6.3.0-7.7)
 * 6.4     (mainline PPA      - linux-image-unsigned-6.4.0-060400-generic_6.4.0-060400.202306271339)
 * 6.5-rc1 (mainline PPA      - linux-image-unsigned-6.5.0-060500rc1-generic_6.5.0-060500rc1.202307092131)
+* 6.6-rc3 (mainline PPA      - linux-image-unsigned-6.6.0-060600rc3-generic_6.6.0-060600rc3.202309242231)
 
 ## Concept of this reproducer
 
@@ -83,32 +84,26 @@ have to wait for them before we can test again.
 sysctl net.ipv4.tcp_max_tw_buckets=0
 ```
 
-Setup the veth interfaces that are used for redirecting from/to:
+Setup the veth interfaces that are used for redirecting to the physical NIC.
+Traffic is sent on the veth interface and redirected to the bnxt_en interface,
+but response traffic is just passed to the host directly:
 
 ```
 # bash reproducer.sh setup
 ```
 
-Set the mode of the script so egress traffic is sent on the veth interface and
-redirected to the bnxt_en interface, but response traffic is just passed to the
-host directly:
-
-```
-# bash reproducer.sh set_mode redirect_egress
-```
-
-The issue is visible when running the `run` subcommand of the script and output 
-looks like the following example. It prints the port it is using and if the curl
-download succeeded it prints "works", so the issue is not present. It prints 
-"failed" (usually right after a curl error message) if the curl did not succeed.
-This is the issue being visible. If the test is run again, it will stall at the
-same ports.
+The issue is visible when running the `run_curl` subcommand of the script and
+output looks like the following example. It prints the port it is using and if
+the curl download succeeded it prints "works", so the issue is not present. It
+prints "failed" (usually right after a curl error message) if the curl did not
+succeed. This is the issue being visible. If the test is run again, it will
+stall at the same ports.
 
 For us, it usually works right on the first run. If it doesn't for you, try a
 couple of times until there are failed ports like in the example below.
 
 ```
-# bash reproducer.sh run
+# bash reproducer.sh run_curl
 ...
 Local Port 32732:
 works
@@ -146,50 +141,19 @@ See the script's head for environment variables consumed by the script.
 ### setup
 
 The subcommand creates a veth pair so we can redirect from/to interfaces. It 
-builds the bpf programs, loads and attaches them but does not provision the 
-redirect map, so no redirect happen yet.
+builds the bpf programs, loads and attaches them and sets up the eBPF map used
+for redirecting traffic to the bnxt_en interface. Traffic to the test host will
+be sent out on the veth interface but replies received on the external interface
+directly.
 
-### set_mode
-
-There are 4 modes that can be set. They are setting up the redirect map with
-the correct (or no) values and add a route on the clone interface if traffic
-is to be sent on the interface.
-
-You can do multiple test runs in various modes. The external interface is not
-changed, so once a broken state is observed in a mode, you can change the mode
-and the issue should be visible in the new mode as well.
-
-#### redirect_none (short: n)
-
-Traffic is just sent out and received on the external interface. This is the
-active mode right after `setup` has been executed.
-
-#### redirect_ingress (short: i)
-
-Traffic is sent out on the external interface but replies are redirected and
-received on the veth interface.
-
-#### redirect_egress (short: e)
-
-Traffic is sent out on the veth interface but replies received on the external
-interface directly.
-
-#### redirect_both (short: b)
-
-Traffic is sent out and received on the veth interface. Redirects happening in
-both directions.
-
-### run
+### run_curl
 
 Does some traffic by downloading a file using curl from a series of local ports
-(32700-32767). This should work without issues repeatedly.
+(32700-32767). This works without issues repeatedly before `setup` is done. Once
+`setup` is done, the issue appears as described above.
 
 ### cleanup
 
 Detach the XDP program from the external interface. Delete the veth interfaces.
 Unload the eBPF programs. The detach of the XDP program triggers an init of the
-NIC and clears the issue.
-
-### reset
-
-Combines `cleanup` and `setup` in one command.
+NIC and clears the issue. The test `run_curl` works without issues again.
