@@ -33,6 +33,8 @@ get stuck.
 
 * Broadcom Inc. and subsidiaries BCM57414 NetXtreme-E 10Gb/25Gb RDMA Ethernet Controller
 
+Firmware: 227.0.134.0/pkg 227.1.111.0
+
 ## Kernel versions tested with issue present
 
 Distro used: Ubuntu 22.04
