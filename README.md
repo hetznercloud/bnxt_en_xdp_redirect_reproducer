@@ -45,9 +45,12 @@ Kernel cmdline: BOOT_IMAGE=/vmlinuz-6.5.0-060500rc1-generic root=/dev/mapper/vg_
 * 6.2     (23.04 sources     - linux-image-6.2.0-25-generic_6.2.0-25.25)
 * 6.3     (23.04 sources     - linux-image-6.3.0-7-generic_6.3.0-7.7)
 * 6.4     (mainline PPA      - linux-image-unsigned-6.4.0-060400-generic_6.4.0-060400.202306271339)
+* 6.5     (HWE 22.04 package - linux-image-6.5.0-27-generic_6.5.0-27.28)
 * 6.5-rc1 (mainline PPA      - linux-image-unsigned-6.5.0-060500rc1-generic_6.5.0-060500rc1.202307092131)
 * 6.6-rc3 (mainline PPA      - linux-image-unsigned-6.6.0-060600rc3-generic_6.6.0-060600rc3.202309242231)
 * 6.6-rc5 (mainline PPA      - linux-image-unsigned-6.6.0-060600rc5-generic_6.6.0-060600rc5.202310081731)
+* 6.8.4   (mainline PPA      - linux-image-unsigned-6.8.4-060804-generic_6.8.4-060804.202404041833)
+* 6.9-rc3 (mainline PPA      - linux-image-unsigned-6.9.0-060900rc3-generic_6.9.0-060900rc3.202404072033)
 
 ## Concept of this reproducer
 
