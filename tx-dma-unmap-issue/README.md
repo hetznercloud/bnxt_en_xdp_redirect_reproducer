@@ -73,10 +73,9 @@ Firmware: 230.0.157.0/pkg 230.1.116.0
 
 ## Kernel versions tested with issue present
 
-Distro used: Ubuntu 22.04
-Kernel: 6.8.0-48 (linux-image-generic-hwe-22.04)
-
-Reproducible with in-tree bnxt_en driver and out-of-tree bnxt_en driver by
+* Distro used: Ubuntu 22.04
+* Kernel: 6.8.0-48 (linux-image-generic-hwe-22.04)
+* Reproducible with in-tree bnxt_en driver and out-of-tree bnxt_en driver by
 Broadcom (bnxt_en-1.10.3-231.0.162.0).
 
 ## Concept of this reproducer
@@ -108,8 +107,33 @@ interface.
   generating the packets.
 * [tapecho](tapecho) for a minimal TAP device owning program reflecting packets.
 
-Clone and build the `xdp-tools`. `netsniff-ng` is usually available packaged by
-distros. Clone this repo and build `tapecho`.
+
+### Preparations
+
+Packages required on an Ubuntu 22.04 host:
+
+```
+# apt install linux-image-generic-hwe-22.04 linux-tools-generic-hwe-22.04 netsniff-ng build-essential pkg-config m4 llvm clang zlib1g-dev libelf-dev libpcap-dev liburing-dev
+```
+
+Reboot to boot the installed kernel.
+
+Build **tapecho**:
+
+```
+# git clone https://github.com/hetznercloud/bnxt_en_xdp_redirect_reproducer.git
+# cd bnxt_en_xdp_redirect_reproducer/tx-dma-unmap-issue/tapecho
+# make
+```
+
+Build **xdp-tools**:
+
+```
+# git clone https://github.com/xdp-project/xdp-tools.git
+# cd xdp-tools
+# ./configure
+# make
+```
 
 ### Run
 
@@ -117,29 +141,36 @@ Assuming the bnxt_en interface is `eth0` the steps after building the tools
 above are:
 
 
-#### Creating the TAP device (tapecho) and runing the echo program
+#### Creating the TAP device (tapecho) and running the echo program
+
+`tapecho` creates the `tapecho` tap device and reflects all packets it receives:
 
 ```
-# tapecho/tapecho
+# bnxt_en_xdp_redirect_reproducer/tx-dma-unmap-issue/tapecho/tapecho
 ```
 
 #### Attaching the XDP redirect program
 
+`xdp-bench redirect` attaches an XDP program that redirects all packets:
+
 ```
-# xdp/tools/xdp-bench/xdp-bench redirect tapecho eth0
+# xdp-tools/xdp-bench/xdp-bench redirect tapecho eth0
 ```
 
 #### Generating and sending packets
 
-Trafgen config can be quite simple. Addresses are not important.
+Trafgen config can be quite simple. Addresses are not important, but total
+packet length must be above 128 byte:
 
 ```
 # cat trafgen.cfg
 {
   udp(sp=dinc(), dp=2222),
-  fill(0xFF, 100)
+  fill(0xFF, 102)
 }
 ```
+
+Run trafgen:
 
 ```
 # trafgen -P1 -o tapecho -c trafgen.cfg
